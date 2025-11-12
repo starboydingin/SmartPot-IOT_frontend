@@ -1,3 +1,3 @@
-# flutter_application_1
+# Smart Pot IOT
 
 Stay Tuned, link apk menyusul
