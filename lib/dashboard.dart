@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'plant_detail.dart';
 import 'notification_page.dart' show NotificationPage, createFadeSlideRoute;
+import 'add_new_pot.dart'; // ⬅️ Tambahan penting
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -43,6 +44,7 @@ class DashboardScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+
                 // Notification & Profile Buttons
                 Row(
                   children: [
@@ -99,6 +101,7 @@ class DashboardScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 PotCard(
                   plantName: "Mint Plant",
                   location: "Balcony",
@@ -125,6 +128,7 @@ class DashboardScreen extends StatelessWidget {
                     );
                   },
                 ),
+
                 PotCard(
                   plantName: "Rose Plant",
                   location: "Garden",
@@ -160,7 +164,9 @@ class DashboardScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: ElevatedButton.icon(
               onPressed: () {
-                Navigator.pushNamed(context, '/add-pot');
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const AddNewPotScreen()),
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: notificationGreen,
@@ -212,7 +218,6 @@ class PotCard extends StatefulWidget {
 }
 
 class _PotCardState extends State<PotCard> {
-  bool _isPumpOn = false;
 
   @override
   Widget build(BuildContext context) {
@@ -267,6 +272,7 @@ class _PotCardState extends State<PotCard> {
               ),
 
               const SizedBox(height: 12),
+
               // Soil Moisture Bar
               const Text("Soil Moisture"),
               const SizedBox(height: 6),
@@ -304,47 +310,6 @@ class _PotCardState extends State<PotCard> {
               ),
 
               const Divider(height: 30),
-
-              // Water Pump Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Water Pump",
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Row(
-                    children: [
-                      Text(
-                        _isPumpOn ? "ON" : "OFF",
-                        style: TextStyle(
-                          color: _isPumpOn ? Colors.green : Colors.grey,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Switch(
-                        value: _isPumpOn,
-                        onChanged: (val) {
-                          setState(() {
-                            _isPumpOn = val;
-                          });
-                        },
-                        thumbColor: WidgetStateProperty.resolveWith<Color?>(
-                          (states) =>
-                              _isPumpOn ? Colors.green : Colors.grey,
-                        ),
-                        trackColor: WidgetStateProperty.resolveWith<Color?>(
-                          (states) => _isPumpOn
-                              ? Colors.green.withValues(alpha: 0.3)
-                              : Colors.grey[300],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ],
           ),
         ),

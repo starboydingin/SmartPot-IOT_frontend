@@ -1,6 +1,31 @@
 import 'package:flutter/material.dart';
 import 'dashboard.dart';
 
+Widget buildBackButton(VoidCallback onPressed) {
+  return GestureDetector(
+    onTap: onPressed,
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const Icon(
+        Icons.arrow_back,
+        color: Colors.black87,
+        size: 22,
+      ),
+    ),
+  );
+}
+
 // ======== Fade + Slide Route Function ========
 Route createFadeSlideRoute(Widget page) {
   return PageRouteBuilder(
