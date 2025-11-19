@@ -3,7 +3,9 @@ import 'welcome_screen.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 import 'dashboard.dart';
-import 'notification_page.dart'; // ✅ Tambahkan import halaman notifikasi
+import 'notification_page.dart';
+import 'profile_page.dart';      // ✅ Tambahkan halaman Profile asli
+import 'add_new_pot.dart';      // ✅ Tambahkan halaman Add Pot asli
 
 void main() {
   runApp(const SmartPlantApp());
@@ -21,22 +23,22 @@ class SmartPlantApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4CAF50)),
         useMaterial3: true,
       ),
+
       home: const WelcomeScreen(),
+
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/dashboard': (context) => const DashboardScreen(),
 
-        // ✅ Ganti placeholder menjadi halaman notifikasi asli
+        // Notification Page
         '/notifications': (context) => const NotificationPage(),
 
-        // Masih placeholder untuk profile & add-pot
-        '/profile': (context) => const Scaffold(
-              body: Center(child: Text('Profile Page')),
-            ),
-        '/add-pot': (context) => const Scaffold(
-              body: Center(child: Text('Add Smart Pot Page')),
-            ),
+        // Profile page (bukan placeholder lagi)
+        '/profile': (context) => const ProfilePage(),
+
+        // Add Smart Pot Page (bukan placeholder lagi)
+        '/add-pot': (context) => const AddNewPotScreen(),
       },
     );
   }

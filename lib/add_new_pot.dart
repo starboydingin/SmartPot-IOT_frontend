@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 
+/// ===============================================================
+/// BACK BUTTON REUSABLE
+/// ===============================================================
 Widget buildBackButton(VoidCallback onPressed) {
   return GestureDetector(
     onTap: onPressed,
     child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.25),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -18,13 +21,16 @@ Widget buildBackButton(VoidCallback onPressed) {
       ),
       child: const Icon(
         Icons.arrow_back,
-        color: Colors.black87,
+        color: Colors.white,
         size: 22,
       ),
     ),
   );
 }
 
+/// ===============================================================
+/// ADD NEW POT PAGE
+/// ===============================================================
 class AddNewPotScreen extends StatelessWidget {
   const AddNewPotScreen({super.key});
 
@@ -34,16 +40,19 @@ class AddNewPotScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF3F3F3),
       body: Column(
         children: [
-          // ================= HEADER =================
+        // ================= HEADER =================
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(
               top: 50,
               left: 20,
               right: 20,
-              bottom: 40,
+              bottom: 30, // dikurangi dari 40 → supaya tidak nabrak
             ),
-            decoration: const BoxDecoration(
+            constraints: const BoxConstraints(
+              minHeight: 170, // 🔥 tambahkan tinggi minimum
+            ),
+           decoration: const BoxDecoration(
               color: Color(0xFF4CAF50),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(30),
@@ -53,7 +62,6 @@ class AddNewPotScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🔥 Back button diganti memakai fungsi buildBackButton (TANPA ubah struktur)
                 buildBackButton(() => Navigator.pop(context)),
 
                 const SizedBox(height: 20),
@@ -80,9 +88,10 @@ class AddNewPotScreen extends StatelessWidget {
             ),
           ),
 
+
           const SizedBox(height: 20),
 
-          // ================= INPUT CARD =================
+          /// ================= FORM CARD =================
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -101,6 +110,7 @@ class AddNewPotScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Pot Name
                   const Text(
                     "Pot Name",
                     style: TextStyle(
@@ -110,22 +120,7 @@ class AddNewPotScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // Pot name Input
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: "e.g., Basil Plant",
-                      filled: true,
-                      fillColor: Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
+                  _buildInput("e.g., Basil Plant"),
 
                   const SizedBox(height: 10),
 
@@ -136,6 +131,7 @@ class AddNewPotScreen extends StatelessWidget {
 
                   const SizedBox(height: 20),
 
+                  // Device ID
                   const Text(
                     "Device ID",
                     style: TextStyle(
@@ -145,24 +141,10 @@ class AddNewPotScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
 
-                  // Device ID input
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: "e.g., SPP-12345",
-                      filled: true,
-                      fillColor: Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                  ),
+                  _buildInput("e.g., SPP-12345"),
 
                   const SizedBox(height: 10),
+
                   const Text(
                     "Found on the device label",
                     style: TextStyle(color: Colors.black54, fontSize: 12),
@@ -181,9 +163,7 @@ class AddNewPotScreen extends StatelessWidget {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: () {
-                  // logic register device nanti taruh sini
-                },
+                onPressed: () {},
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   shape: RoundedRectangleBorder(
@@ -202,6 +182,25 @@ class AddNewPotScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Reusable Input Field
+  Widget _buildInput(String hint) {
+    return TextField(
+      decoration: InputDecoration(
+        hintText: hint,
+        filled: true,
+        fillColor: Colors.grey[200],
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }

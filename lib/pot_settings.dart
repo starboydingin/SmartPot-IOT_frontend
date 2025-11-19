@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'custom_back_button.dart'; // ⬅️ pastikan path sesuai
 
 class PotSettingsPage extends StatefulWidget {
   final String plantName;
@@ -41,6 +42,15 @@ class _PotSettingsPageState extends State<PotSettingsPage>
       appBar: AppBar(
         backgroundColor: Colors.green,
         elevation: 0,
+
+        // ===================== 🔥 CUSTOM BACK BUTTON ======================
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: CustomBackButton(
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -52,6 +62,7 @@ class _PotSettingsPageState extends State<PotSettingsPage>
                 fontWeight: FontWeight.w600,
               ),
             ),
+
             Text(
               widget.plantName,
               style: const TextStyle(
@@ -61,21 +72,6 @@ class _PotSettingsPageState extends State<PotSettingsPage>
               ),
             ),
           ],
-        ),
-
-        // 🔥 BACK BUTTON CUSTOM — sama persis kayak referensi lu
-        leading: GestureDetector(
-          onTap: () => Navigator.pop(context),
-          child: Container(
-            margin: const EdgeInsets.only(left: 12),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.arrow_back,
-                color: Colors.white, size: 22),
-          ),
         ),
 
         bottom: TabBar(
@@ -91,6 +87,7 @@ class _PotSettingsPageState extends State<PotSettingsPage>
           ],
         ),
       ),
+
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -102,7 +99,10 @@ class _PotSettingsPageState extends State<PotSettingsPage>
     );
   }
 
-  // ===================== SOIL MOISTURE =====================
+  // ============================================================
+  // SOIL MOISTURE
+  // ============================================================
+
   Widget _buildSoilMoistureSettings() {
     return _buildScrollableColumn([
       _buildSliderCard(
@@ -161,7 +161,10 @@ class _PotSettingsPageState extends State<PotSettingsPage>
     ]);
   }
 
-  // ===================== LUX INTENSITY =====================
+  // ============================================================
+  // LUX INTENSITY
+  // ============================================================
+
   Widget _buildLuxIntensitySettings() {
     return _buildScrollableColumn([
       _buildSliderCard(
@@ -207,7 +210,10 @@ class _PotSettingsPageState extends State<PotSettingsPage>
     ]);
   }
 
-  // ===================== TEMP & HUMIDITY =====================
+  // ============================================================
+  // TEMP & HUMIDITY
+  // ============================================================
+
   Widget _buildTempHumiditySettings() {
     return _buildScrollableColumn([
       _buildSliderCard(
@@ -226,8 +232,7 @@ class _PotSettingsPageState extends State<PotSettingsPage>
       _buildSliderCard(
         title: "Ambang Suhu Ekstrem",
         color: Colors.blue,
-        description:
-            "Suhu kritis yang memicu notifikasi panas berlebih.",
+        description: "Suhu kritis yang memicu notifikasi panas berlebih.",
         value: _extremeTemp,
         min: 32,
         max: 45,
@@ -253,7 +258,9 @@ class _PotSettingsPageState extends State<PotSettingsPage>
     ]);
   }
 
-  // ===================== REUSABLE COMPONENTS =====================
+  // ============================================================
+  // REUSABLE COMPONENTS
+  // ============================================================
 
   Widget _buildScrollableColumn(List<Widget> children) {
     return SingleChildScrollView(

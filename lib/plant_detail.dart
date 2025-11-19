@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'pot_settings.dart'; // 👉 pastikan file ini bener namanya
+import 'pot_settings.dart';
+import 'custom_back_button.dart'; // <--- WAJIB ADA
 
 class AppColors {
   static const Color primary = Color(0xFF4CAF50);
@@ -98,17 +99,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.arrow_back, color: Colors.white),
-                    ),
-                  ),
+                  const CustomBackButton(),   // <--- SUDAH DIGANTI
                   const SizedBox(height: 20),
                   Text(widget.plantName, style: AppTextStyle.heading),
                   const SizedBox(height: 4),
@@ -299,7 +290,6 @@ class _PlantDetailScreenState extends State<PlantDetailScreen> {
                       ),
                     ),
                     onPressed: () {
-                      // 👉 GANTI ke halaman pot_settings_page.dart
                       Navigator.push(
                         context,
                         MaterialPageRoute(

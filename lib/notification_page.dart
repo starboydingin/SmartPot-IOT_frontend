@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'dashboard.dart';
 
+/// ===============================================================
+/// BACK BUTTON REUSABLE (SAMA DENGAN PUNYA KAMU)
+/// ===============================================================
 Widget buildBackButton(VoidCallback onPressed) {
   return GestureDetector(
     onTap: onPressed,
     child: Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white.withValues(alpha: 0.25),
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
+            color: Colors.black.withValues(alpha: 0.18),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -19,14 +22,16 @@ Widget buildBackButton(VoidCallback onPressed) {
       ),
       child: const Icon(
         Icons.arrow_back,
-        color: Colors.black87,
+        color: Colors.white,
         size: 22,
       ),
     ),
   );
 }
 
-// ======== Fade + Slide Route Function ========
+/// ===============================================================
+/// FADE + SLIDE ROUTE
+/// ===============================================================
 Route createFadeSlideRoute(Widget page) {
   return PageRouteBuilder(
     transitionDuration: const Duration(milliseconds: 600),
@@ -53,7 +58,9 @@ Route createFadeSlideRoute(Widget page) {
   );
 }
 
-// ======== Notification Page ========
+/// ===============================================================
+/// NOTIFICATION PAGE
+/// ===============================================================
 class NotificationPage extends StatefulWidget {
   const NotificationPage({Key? key}) : super(key: key);
 
@@ -74,12 +81,13 @@ class _NotificationPageState extends State<NotificationPage> {
       "icon": Icons.thermostat,
       "iconColor": Colors.redAccent,
       "title": "Succulent",
-      "message": "Temperature exceeds 30°C. Consider moving to cooler location.",
+      "message":
+          "Temperature exceeds 30°C. Consider moving to cooler location.",
       "time": "15 minutes ago",
     },
     {
       "icon": Icons.wb_sunny_outlined,
-      "iconColor": Colors.amber[700],
+      "iconColor": Colors.amber,
       "title": "Basil Plant",
       "message": "Light intensity optimal for healthy growth.",
       "time": "1 hour ago",
@@ -96,11 +104,15 @@ class _NotificationPageState extends State<NotificationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
+
       body: Column(
         children: [
-          // ===== Header Section =====
+          // =========================================================
+          // HEADER
+          // =========================================================
           Container(
-            padding: const EdgeInsets.only(top: 60, left: 20, right: 20, bottom: 30),
+            padding: const EdgeInsets.only(
+                top: 60, left: 20, right: 20, bottom: 30),
             decoration: const BoxDecoration(
               color: Color(0xFF4CAF50),
               borderRadius: BorderRadius.only(
@@ -109,17 +121,18 @@ class _NotificationPageState extends State<NotificationPage> {
               ),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                IconButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      createFadeSlideRoute(const DashboardScreen()),
-                    );
-                  },
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                ),
-                const SizedBox(width: 10),
+                /// 🔥 REUSABLE BACK BUTTON
+                buildBackButton(() {
+                  Navigator.pushReplacement(
+                    context,
+                    createFadeSlideRoute(const DashboardScreen()),
+                  );
+                }),
+
+                const SizedBox(width: 16),
+
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -144,7 +157,9 @@ class _NotificationPageState extends State<NotificationPage> {
             ),
           ),
 
-          // ===== Clear All Button =====
+          // =========================================================
+          // CLEAR ALL BUTTON
+          // =========================================================
           Container(
             margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -172,7 +187,9 @@ class _NotificationPageState extends State<NotificationPage> {
             ),
           ),
 
-          // ===== Notification List =====
+          // =========================================================
+          // NOTIFICATION LIST
+          // =========================================================
           Expanded(
             child: notifications.isEmpty
                 ? const Center(
@@ -182,11 +199,12 @@ class _NotificationPageState extends State<NotificationPage> {
                     ),
                   )
                 : ListView.builder(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 5),
                     itemCount: notifications.length,
                     itemBuilder: (context, index) {
                       final notif = notifications[index];
+
                       return Container(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         padding: const EdgeInsets.all(16),
@@ -210,7 +228,7 @@ class _NotificationPageState extends State<NotificationPage> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Icon
+                            // ICON
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
@@ -226,7 +244,7 @@ class _NotificationPageState extends State<NotificationPage> {
                             ),
                             const SizedBox(width: 14),
 
-                            // Text Info
+                            // TEXT
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
