@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'manage_pots_page.dart';
+import 'remove_device.dart';
+import 'profile_settings.dart';
+import 'login_screen.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -98,9 +102,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 buildMenuTile(
                   icon: Icons.edit_square,
                   iconBg: const Color(0xFFE8F5E9),
-                  iconColor: Colors.green[700]!,
+                  iconColor: Colors.green,
                   title: "Manage Pots",
                   subtitle: "Rename or configure devices",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ManagePotsPage(),
+                      ),
+                    );
+                  },
                 ),
                 divider(),
                 buildMenuTile(
@@ -109,6 +121,14 @@ class _ProfilePageState extends State<ProfilePage> {
                   iconColor: Colors.red,
                   title: "Remove Devices",
                   subtitle: "Disconnect pots from app",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const RemoveDevicePage(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -149,9 +169,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 buildMenuTile(
                   icon: Icons.person_2_outlined,
                   iconBg: const Color(0xFFE3F2FD),
-                  iconColor: Colors.blue[700]!,
+                  iconColor: Colors.blue,
                   title: "Profile Settings",
                   subtitle: "Edit your information",
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ProfileSettingsPage(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -162,7 +190,13 @@ class _ProfilePageState extends State<ProfilePage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: GestureDetector(
-                onTap: () {},
+                onTap: () {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  );
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   decoration: BoxDecoration(
@@ -246,42 +280,46 @@ class _ProfilePageState extends State<ProfilePage> {
     required Color iconColor,
     required String title,
     required String subtitle,
+    required VoidCallback onTap,
   }) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: iconBg,
-            borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: onTap,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 22),
           ),
-          child: Icon(icon, color: iconColor, size: 22),
-        ),
 
-        const SizedBox(width: 14),
+          const SizedBox(width: 14),
 
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  )),
-              const SizedBox(height: 3),
-              Text(subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.black54,
-                  )),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    )),
+                const SizedBox(height: 3),
+                Text(subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                    )),
+              ],
+            ),
           ),
-        ),
 
-        const Icon(Icons.arrow_forward_ios_rounded,
-            size: 16, color: Colors.black45),
-      ],
+          const Icon(Icons.arrow_forward_ios_rounded,
+              size: 16, color: Colors.black45),
+        ],
+      ),
     );
   }
 
@@ -318,8 +356,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 15,
-                        color:
-                            isSelected ? Colors.green[700] : Colors.black87,
+                        color: isSelected ? Colors.green[700] : Colors.black87,
                       )),
                   const SizedBox(height: 3),
                   Text(subtitle,

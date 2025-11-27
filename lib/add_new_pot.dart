@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// ===============================================================
-/// BACK BUTTON REUSABLE
-/// ===============================================================
 Widget buildBackButton(VoidCallback onPressed) {
   return GestureDetector(
     onTap: onPressed,
@@ -28,9 +25,6 @@ Widget buildBackButton(VoidCallback onPressed) {
   );
 }
 
-/// ===============================================================
-/// ADD NEW POT PAGE
-/// ===============================================================
 class AddNewPotScreen extends StatelessWidget {
   const AddNewPotScreen({super.key});
 
@@ -40,7 +34,7 @@ class AddNewPotScreen extends StatelessWidget {
       backgroundColor: const Color(0xFFF3F3F3),
       body: Column(
         children: [
-        // ================= HEADER =================
+        
           Container(
             width: double.infinity,
             padding: const EdgeInsets.only(
@@ -50,7 +44,7 @@ class AddNewPotScreen extends StatelessWidget {
               bottom: 30, // dikurangi dari 40 → supaya tidak nabrak
             ),
             constraints: const BoxConstraints(
-              minHeight: 170, // 🔥 tambahkan tinggi minimum
+              minHeight: 170, 
             ),
            decoration: const BoxDecoration(
               color: Color(0xFF4CAF50),
