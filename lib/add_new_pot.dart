@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'services/device_service.dart';
+
 Widget buildBackButton(VoidCallback onPressed) {
   return GestureDetector(
     onTap: onPressed,
@@ -25,8 +27,54 @@ Widget buildBackButton(VoidCallback onPressed) {
   );
 }
 
-class AddNewPotScreen extends StatelessWidget {
+class AddNewPotScreen extends StatefulWidget {
   const AddNewPotScreen({super.key});
+
+  @override
+  State<AddNewPotScreen> createState() => _AddNewPotScreenState();
+}
+
+class _AddNewPotScreenState extends State<AddNewPotScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final TextEditingController _potNameController = TextEditingController();
+  final TextEditingController _deviceIdController = TextEditingController();
+  bool _isSubmitting = false;
+
+  final DeviceService _deviceService = DeviceService();
+
+  @override
+  void dispose() {
+    _potNameController.dispose();
+    _deviceIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _registerDevice() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSubmitting = true);
+    try {
+      await _deviceService.createDevice(
+        deviceName: _deviceIdController.text.trim(),
+        potName: _potNameController.text.trim(),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Device registered successfully')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,62 +136,62 @@ class AddNewPotScreen extends StatelessWidget {
           /// ================= FORM CARD =================
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Pot Name
-                  const Text(
-                    "Pot Name",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+            child: Form(
+              key: _formKey,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  _buildInput("e.g., Basil Plant"),
-
-                  const SizedBox(height: 10),
-
-                  const Text(
-                    "Choose a friendly name for your plant",
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Device ID
-                  const Text(
-                    "Device ID",
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Pot Name",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  _buildInput("e.g., SPP-12345"),
-
-                  const SizedBox(height: 10),
-
-                  const Text(
-                    "Found on the device label",
-                    style: TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    _buildInput(
+                      controller: _potNameController,
+                      hint: "e.g., Basil Plant",
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Choose a friendly name for your plant",
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      "Device ID",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildInput(
+                      controller: _deviceIdController,
+                      hint: "e.g., SPP-12345",
+                      textCapitalization: TextCapitalization.characters,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Found on the device label",
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -157,21 +205,30 @@ class AddNewPotScreen extends StatelessWidget {
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                onPressed: () {},
+                onPressed: _isSubmitting ? null : _registerDevice,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  "Register Device",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: _isSubmitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        "Register Device",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -181,8 +238,16 @@ class AddNewPotScreen extends StatelessWidget {
   }
 
   /// Reusable Input Field
-  Widget _buildInput(String hint) {
-    return TextField(
+  Widget _buildInput({
+    required TextEditingController controller,
+    required String hint,
+    TextCapitalization textCapitalization = TextCapitalization.words,
+  }) {
+    return TextFormField(
+      controller: controller,
+      textCapitalization: textCapitalization,
+      validator: (value) =>
+          (value == null || value.trim().isEmpty) ? 'This field is required' : null,
       decoration: InputDecoration(
         hintText: hint,
         filled: true,

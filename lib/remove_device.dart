@@ -1,23 +1,113 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/custom_back_button.dart';
 
-class RemoveDevicePage extends StatelessWidget {
+import 'custom_back_button.dart';
+import 'models/device_model.dart';
+import 'services/device_service.dart';
+
+class RemoveDevicePage extends StatefulWidget {
   const RemoveDevicePage({super.key});
 
-  static final List<Map<String, String>> _devices = [
-    {"name": "Basil Plant", "id": "SPP-10001"},
-    {"name": "Mint Plant", "id": "SPP-10002"},
-    {"name": "Succulent", "id": "SPP-10003"},
-  ];
+  @override
+  State<RemoveDevicePage> createState() => _RemoveDevicePageState();
+}
+
+class _RemoveDevicePageState extends State<RemoveDevicePage> {
+  final DeviceService _deviceService = DeviceService();
+
+  List<Device> _devices = [];
+  bool _isLoading = true;
+  String? _error;
+  String? _removingId;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final devices = await _deviceService.getAllDevices();
+      setState(() {
+        _devices = devices;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _confirmAndRemove(Device device) async {
+    final removed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => ConfirmRemoveDialog(deviceName: device.displayName),
+    );
+
+    if (removed == true) {
+      await _removeDevice(device);
+    }
+  }
+
+  Future<void> _removeDevice(Device device) async {
+    setState(() => _removingId = device.id);
+    try {
+      final success = await _deviceService.deleteDevice(device.id);
+      if (success) {
+        setState(() {
+          _devices = _devices.where((d) => d.id != device.id).toList();
+          _hasChanges = true;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${device.displayName} removed')),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to remove ${device.displayName}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _removingId = null);
+      }
+    }
+  }
+
+  Future<void> _handleBack() async {
+    Navigator.pop(context, _hasChanges);
+  }
 
   @override
   Widget build(BuildContext context) {
     const Color red = Color(0xFFE23939);
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Column(
-        children: [
+    return WillPopScope(
+      onWillPop: () async {
+        _handleBack();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Column(
+          children: [
           // ================= HEADER =================
           Container(
             height: 160,
@@ -37,7 +127,7 @@ class RemoveDevicePage extends StatelessWidget {
                 children: [
                   // ============ BACK BUTTON FIXED ============
                   CustomBackButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _handleBack,
                   ),
 
                   const SizedBox(height: 16),
@@ -71,39 +161,32 @@ class RemoveDevicePage extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ListView.separated(
-                itemCount: _devices.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 16),
-                padding: const EdgeInsets.only(top: 8, bottom: 24),
-                itemBuilder: (context, index) {
-                  final device = _devices[index];
-                  return DeviceCard(
-                    name: device['name']!,
-                    id: device['id']!,
-                    onRemovePressed: () async {
-                      final removed = await showDialog<bool>(
-                        context: context,
-                        barrierDismissible: true,
-                        builder: (ctx) =>
-                            ConfirmRemoveDialog(deviceName: device['name']!),
-                      );
-
-                      if (removed == true && context.mounted) {
-                        debugPrint("Device ${device['name']} removed");
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text("Device ${device['name']} removed"),
-                          ),
-                        );
-                      }
-                    },
-                  );
-                },
-              ),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : _devices.isEmpty
+                          ? const Center(child: Text('No devices to remove'))
+                          : RefreshIndicator(
+                              onRefresh: _loadDevices,
+                              child: ListView.separated(
+                                itemCount: _devices.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 16),
+                                padding: const EdgeInsets.only(top: 8, bottom: 24),
+                                itemBuilder: (context, index) {
+                                  final device = _devices[index];
+                                  return DeviceCard(
+                                    device: device,
+                                    isRemoving: _removingId == device.id,
+                                    onRemovePressed: () => _confirmAndRemove(device),
+                                  );
+                                },
+                              ),
+                            ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -112,14 +195,14 @@ class RemoveDevicePage extends StatelessWidget {
 // ================= DEVICE CARD =================
 
 class DeviceCard extends StatelessWidget {
-  final String name;
-  final String id;
+  final Device device;
+  final bool isRemoving;
   final VoidCallback onRemovePressed;
 
   const DeviceCard({
     super.key,
-    required this.name,
-    required this.id,
+    required this.device,
+    required this.isRemoving,
     required this.onRemovePressed,
   });
 
@@ -140,7 +223,7 @@ class DeviceCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
+                    device.displayName,
                     style: const TextStyle(
                       color: Color(0xFF3DAA3D),
                       fontSize: 16,
@@ -149,7 +232,7 @@ class DeviceCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    id,
+                    device.deviceName,
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 14,
@@ -163,9 +246,17 @@ class DeviceCard extends StatelessWidget {
             SizedBox(
               height: 45,
               child: OutlinedButton.icon(
-                onPressed: onRemovePressed,
-                icon: const Icon(Icons.delete_outline, size: 18),
-                label: const Text("Remove Device"),
+                onPressed: isRemoving ? null : onRemovePressed,
+                icon: isRemoving
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline, size: 18),
+                label: isRemoving
+                    ? const Text('Removing...')
+                    : const Text("Remove Device"),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: red,
                   side: const BorderSide(color: red),

@@ -1,14 +1,242 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'plant_detail.dart';
 import 'notification_page.dart' show NotificationPage, createFadeSlideRoute;
-import 'add_new_pot.dart'; // ⬅️ Tambahan penting
+import 'add_new_pot.dart';
+import 'profile_page.dart';
+import 'models/device_model.dart';
+import 'models/sensor_data_model.dart';
+import 'services/device_service.dart';
+import 'services/sensor_data_service.dart';
+import 'services/websocket_service.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
   @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final DeviceService _deviceService = DeviceService();
+  final SensorDataService _sensorDataService = SensorDataService();
+  final WebSocketService _webSocketService = WebSocketService();
+  StreamSubscription<Map<String, dynamic>>? _sensorSubscription;
+  bool _sensorChannelReady = false;
+  
+  List<Device> _devices = [];
+  Map<String, SensorData?> _latestSensorData = {}; // UUID keys
+  bool _isLoading = true;
+  String? _error;
+  
+  static const Color notificationGreen = Colors.green;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    _connectSensorChannel();
+  }
+
+  @override
+  void dispose() {
+    _sensorSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final devices = await _deviceService.getAllDevices();
+      final sensorEntries = await Future.wait(
+        devices.map((device) async {
+          try {
+            final sensorData = await _sensorDataService.getLatestSensorData(device.id);
+            return MapEntry(device.id, sensorData);
+          } catch (_) {
+            return MapEntry<String, SensorData?>(device.id, null);
+          }
+        }),
+      );
+
+      final sensorDataMap = {for (final entry in sensorEntries) entry.key: entry.value};
+
+      setState(() {
+        _devices = devices;
+        _latestSensorData = sensorDataMap;
+        _isLoading = false;
+      });
+
+      _requestLatestForDevices(devices);
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _getDeviceStatus(SensorData? data) {
+    if (data == null) return 'No Data';
+    
+    if (data.soilPercent < 30) return 'Needs Water';
+    if (data.temperature > 30) return 'Too Hot';
+    if (data.temperature < 15) return 'Too Cold';
+    return 'Optimal';
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Optimal':
+        return Colors.green;
+      case 'Needs Water':
+        return Colors.orange;
+      case 'Too Hot':
+      case 'Too Cold':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  Future<void> _connectSensorChannel() async {
+    try {
+      final stream = await _webSocketService.connectToSensorData();
+      _sensorChannelReady = true;
+      _sensorSubscription?.cancel();
+      _sensorSubscription = stream.listen(
+        _handleSensorEvent,
+        onError: (_) {
+          _sensorChannelReady = false;
+        },
+        onDone: () {
+          _sensorChannelReady = false;
+        },
+        cancelOnError: false,
+      );
+
+      if (_devices.isNotEmpty) {
+        _requestLatestForDevices(_devices);
+      }
+    } catch (_) {
+      _sensorChannelReady = false;
+    }
+  }
+
+  Future<void> _requestLatestForDevices(List<Device> devices) async {
+    if (!_sensorChannelReady || devices.isEmpty) return;
+    for (final device in devices) {
+      try {
+        await _webSocketService.requestSensorLatest(device.id);
+      } catch (_) {
+        _sensorChannelReady = false;
+        break;
+      }
+    }
+  }
+
+  void _handleSensorEvent(Map<String, dynamic> event) {
+    final type = event['type']?.toString();
+    if (type == null) return;
+    final payload = event['payload'];
+
+    switch (type) {
+      case 'sensor-data:list':
+        _applySensorSnapshotList(payload);
+        break;
+      case 'sensor-data:latest':
+        _applySensorSnapshot(payload);
+        break;
+      case 'sensor-data:error':
+        final message = (payload is Map && payload['message'] != null)
+            ? payload['message'].toString()
+            : 'Sensor realtime error.';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
+        break;
+      default:
+        break;
+    }
+  }
+
+  void _applySensorSnapshotList(dynamic payload) {
+    final snapshots = <DeviceSensorSnapshot>[];
+    if (payload is List) {
+      for (final item in payload) {
+        final snapshot = _decodeSnapshot(item);
+        if (snapshot != null) snapshots.add(snapshot);
+      }
+    } else if (payload is Map && payload['data'] is List) {
+      for (final item in payload['data'] as List<dynamic>) {
+        final snapshot = _decodeSnapshot(item);
+        if (snapshot != null) snapshots.add(snapshot);
+      }
+    }
+
+    if (snapshots.isEmpty) return;
+
+    final updatedDevices = List<Device>.from(_devices);
+    final updatedSensors = Map<String, SensorData?>.from(_latestSensorData);
+
+    for (final snapshot in snapshots) {
+      _mergeDevice(updatedDevices, snapshot.device);
+      updatedSensors[snapshot.device.id] = snapshot.latestSensor;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _devices = updatedDevices;
+      _latestSensorData = updatedSensors;
+    });
+  }
+
+  void _applySensorSnapshot(dynamic payload) {
+    final snapshot = _decodeSnapshot(payload);
+    if (snapshot == null) return;
+
+    final updatedDevices = List<Device>.from(_devices);
+    final updatedSensors = Map<String, SensorData?>.from(_latestSensorData);
+    _mergeDevice(updatedDevices, snapshot.device);
+    updatedSensors[snapshot.device.id] = snapshot.latestSensor;
+
+    if (!mounted) return;
+    setState(() {
+      _devices = updatedDevices;
+      _latestSensorData = updatedSensors;
+    });
+  }
+
+  DeviceSensorSnapshot? _decodeSnapshot(dynamic payload) {
+    if (payload is Map<String, dynamic>) {
+      if (payload.containsKey('device')) {
+        return DeviceSensorSnapshot.fromJson(payload);
+      }
+    } else if (payload is Map) {
+      final map = Map<String, dynamic>.from(payload);
+      if (map.containsKey('device')) {
+        return DeviceSensorSnapshot.fromJson(map);
+      }
+    }
+    return null;
+  }
+
+  void _mergeDevice(List<Device> devices, Device device) {
+    final index = devices.indexWhere((item) => item.id == device.id);
+    if (index >= 0) {
+      devices[index] = device;
+    } else {
+      devices.add(device);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const Color notificationGreen = Colors.green; // 💚 Warna sama seperti di NotificationPage
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -28,8 +256,8 @@ class DashboardScreen extends StatelessWidget {
                 // Title & subtitle
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
+                  children: [
+                    const Text(
                       "My Smart Pot",
                       style: TextStyle(
                         color: Colors.white,
@@ -37,10 +265,10 @@ class DashboardScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      "3 Pots Connected",
-                      style: TextStyle(color: Colors.white70),
+                      "${_devices.length} Pots Connected",
+                      style: const TextStyle(color: Colors.white70),
                     ),
                   ],
                 ),
@@ -58,8 +286,13 @@ class DashboardScreen extends StatelessWidget {
                           color: Colors.white),
                     ),
                     IconButton(
-                      onPressed: () {
-                        Navigator.pushNamed(context, '/profile');
+                      onPressed: () async {
+                        final shouldRefresh = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(builder: (_) => const ProfilePage()),
+                        );
+                        if (shouldRefresh == true) {
+                          _loadData();
+                        }
                       },
                       icon:
                           const Icon(Icons.person_outline, color: Colors.white),
@@ -72,101 +305,97 @@ class DashboardScreen extends StatelessWidget {
 
           // ===== BODY (List of Pots) =====
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                PotCard(
-                  plantName: "Basil Plant",
-                  location: "Kitchen Window",
-                  moisture: 66.84,
-                  temperature: 22.11,
-                  humidity: 67.0,
-                  light: 673.15,
-                  status: "Optimal",
-                  statusColor: Colors.green,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlantDetailScreen(
-                          plantName: "Basil Plant",
-                          location: "Kitchen Window",
-                          moisture: 66.84,
-                          temperature: 22.11,
-                          humidity: 67.0,
-                          light: 673.15,
-                          status: "Optimal",
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                            const SizedBox(height: 16),
+                            Text(_error!, textAlign: TextAlign.center),
+                            const SizedBox(height: 16),
+                            ElevatedButton(
+                              onPressed: _loadData,
+                              child: const Text('Retry'),
+                            ),
+                          ],
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      )
+                    : _devices.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.eco_outlined, size: 64, color: Colors.grey),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No devices yet',
+                                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Add your first Smart Pot below',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: _devices.length,
+                              itemBuilder: (context, index) {
+                                final device = _devices[index];
+                                final sensorData = _latestSensorData[device.id];
+                                final status = _getDeviceStatus(sensorData);
+                                final statusColor = _getStatusColor(status);
 
-                PotCard(
-                  plantName: "Mint Plant",
-                  location: "Balcony",
-                  moisture: 42.17,
-                  temperature: 25.4,
-                  humidity: 55.2,
-                  light: 812.9,
-                  status: "Needs Water",
-                  statusColor: Colors.orange,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlantDetailScreen(
-                          plantName: "Mint Plant",
-                          location: "Balcony",
-                          moisture: 42.17,
-                          temperature: 25.4,
-                          humidity: 55.2,
-                          light: 812.9,
-                          status: "Needs Water",
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                PotCard(
-                  plantName: "Rose Plant",
-                  location: "Garden",
-                  moisture: 75.2,
-                  temperature: 30.6,
-                  humidity: 60.0,
-                  light: 920.1,
-                  status: "Too Hot",
-                  statusColor: Colors.red,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PlantDetailScreen(
-                          plantName: "Rose Plant",
-                          location: "Garden",
-                          moisture: 75.2,
-                          temperature: 30.6,
-                          humidity: 60.0,
-                          light: 920.1,
-                          status: "Too Hot",
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
+                                return PotCard(
+                                  plantName: device.displayName,
+                                  location: device.deviceName,
+                                  moisture: sensorData?.soilPercent ?? 0.0,
+                                  temperature: sensorData?.temperature ?? 0.0,
+                                  humidity: sensorData?.humidity ?? 0.0,
+                                  light: sensorData?.lux ?? 0.0,
+                                  status: status,
+                                  statusColor: statusColor,
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PlantDetailScreen(
+                                          deviceId: device.id,
+                                          plantName: device.displayName,
+                                          location: device.deviceName,
+                                          moisture: sensorData?.soilPercent ?? 0.0,
+                                          temperature: sensorData?.temperature ?? 0.0,
+                                          humidity: sensorData?.humidity ?? 0.0,
+                                          light: sensorData?.lux ?? 0.0,
+                                          status: status,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
           ),
 
           // ===== ADD SMART POT BUTTON =====
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(
+              onPressed: () async {
+                final result = await Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AddNewPotScreen()),
                 );
+                if (result == true) {
+                  _loadData(); // Reload data after adding new device
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: notificationGreen,

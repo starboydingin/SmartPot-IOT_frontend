@@ -1,0 +1,36 @@
+class ApiConfig {
+  // Change this to your backend URL
+  // For local development on Android Emulator: http://10.0.2.2:3000
+  // For local development on physical device: http://YOUR_IP_ADDRESS:3000
+  // For production: https://your-backend-domain.com
+  
+  // 🔥 FLUTTER WEB (Chrome): Use localhost
+  static const String baseUrl = 'http://localhost:3000/api/v1';
+  static const String wsUrl = 'ws://localhost:3000';
+  
+  // 🔥 ANDROID EMULATOR: Use this address
+  // static const String baseUrl = 'http://10.0.2.2:3000/api/v1';
+  // static const String wsUrl = 'ws://10.0.2.2:3000';
+  
+  // 🔥 PHYSICAL DEVICE: Use your computer's IP
+  // static const String baseUrl = 'http://192.168.x.x:3000/api/v1';
+  // static const String wsUrl = 'ws://192.168.x.x:3000';
+  
+  // API Endpoints
+  static const String login = '/auth/login';
+  static const String register = '/auth/register';
+  static const String logout = '/auth/logout';
+  static const String profile = '/auth/profile';
+  
+  static const String devices = '/devices';
+  static const String sensorData = '/sensor-data';
+  static const String control = '/control';
+  static const String notifications = '/notifications';
+  static const String thresholds = '/thresholds';
+  
+  // WebSocket Endpoints
+  static const String wsSensorData = '/ws/sensor-data';
+  static const String wsControl = '/ws/control';
+  static const String wsNotifications = '/ws/notifications';
+  static const String wsThresholds = '/ws/thresholds';
+}

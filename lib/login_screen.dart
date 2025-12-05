@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'fade_slide_route.dart';
 import 'register_screen.dart';
 import 'dashboard.dart';
+import 'services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,18 +14,46 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
   bool _isPasswordVisible = false;
+  bool _isLoading = false;
 
-  void _login() {
-    if (_emailController.text.isNotEmpty && _passwordController.text.isNotEmpty) {
-      Navigator.pushReplacement(
-        context,
-        createFadeSlideRoute(const DashboardScreen()),
-      );
-    } else {
+  Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Please fill in all fields")),
       );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _authService.login(
+        _emailController.text,
+        _passwordController.text,
+      );
+      
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          createFadeSlideRoute(const DashboardScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -166,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 30),
 
               ElevatedButton(
-                onPressed: _login,
+                onPressed: _isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   shape: RoundedRectangleBorder(
@@ -175,10 +204,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   elevation: 5,
                   minimumSize: const Size(double.infinity, 50),
                 ),
-                child: const Text(
-                  "Login",
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        "Login",
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
               ),
               const SizedBox(height: 20),
 

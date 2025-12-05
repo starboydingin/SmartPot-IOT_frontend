@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'fade_slide_route.dart';
 import 'login_screen.dart';
+import 'dashboard.dart';
+import 'services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -10,14 +12,26 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _authService = AuthService();
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  bool _isLoading = false;
 
-  void _register() {
+  Future<void> _register() async {
+    if (_nameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please fill in all fields")),
+      );
+      return;
+    }
+
     if (_passwordController.text != _confirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Passwords do not match ❌")),
@@ -25,18 +39,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Simulasi berhasil registrasi
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Registration successful ✅")),
-    );
-
-    // Tunggu sebentar sebelum pindah ke login
-    Future.delayed(const Duration(seconds: 1), () {
-      Navigator.pushReplacement(
-        context,
-        createFadeSlideRoute(const LoginScreen()),
-      );
+    setState(() {
+      _isLoading = true;
     });
+
+    try {
+      await _authService.register(
+        _nameController.text,
+        _emailController.text,
+        _passwordController.text,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Registration successful ✅")),
+        );
+        
+        // Navigate to dashboard after successful registration
+        Navigator.pushReplacement(
+          context,
+          createFadeSlideRoute(const DashboardScreen()),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   void _navigateToLogin() {
@@ -103,6 +140,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
               ),
               const SizedBox(height: 40),
+
+              // NAME
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "Name",
+                  style: TextStyle(
+                    color: Colors.grey[800],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  hintText: "Full Name",
+                  prefixIcon: const Icon(Icons.person_outline,
+                      color: Color(0xFF4CAF50)),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
 
               // EMAIL
               Align(
@@ -219,7 +284,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               // BUTTON REGISTER
               ElevatedButton(
-                onPressed: _register,
+                onPressed: _isLoading ? null : _register,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF4CAF50),
                   shape: RoundedRectangleBorder(
@@ -228,10 +293,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   elevation: 5,
                   minimumSize: const Size(double.infinity, 50),
                 ),
-                child: const Text(
-                  "Register",
-                  style: TextStyle(fontSize: 16, color: Colors.white),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Text(
+                        "Register",
+                        style: TextStyle(fontSize: 16, color: Colors.white),
+                      ),
               ),
               const SizedBox(height: 20),
 

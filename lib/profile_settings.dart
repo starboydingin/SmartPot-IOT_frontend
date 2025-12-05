@@ -1,8 +1,99 @@
 import 'package:flutter/material.dart';
-import 'custom_back_button.dart';
 
-class ProfileSettingsPage extends StatelessWidget {
+import 'custom_back_button.dart';
+import 'services/auth_service.dart';
+
+class ProfileSettingsPage extends StatefulWidget {
   const ProfileSettingsPage({super.key});
+
+  @override
+  State<ProfileSettingsPage> createState() => _ProfileSettingsPageState();
+}
+
+class _ProfileSettingsPageState extends State<ProfileSettingsPage> {
+  final _fullNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _locationController = TextEditingController();
+  final AuthService _authService = AuthService();
+
+  bool _isLoading = true;
+  bool _isSaving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _locationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final user = await _authService.getCachedUser();
+      if (user == null) {
+        setState(() {
+          _error = 'Profile data unavailable. Please login again.';
+          _isLoading = false;
+        });
+        return;
+      }
+
+      setState(() {
+        _fullNameController.text = user.fullName;
+        _emailController.text = user.email;
+        _phoneController.text = user.phoneNumber ?? '';
+        _locationController.text = user.location ?? '';
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _isSaving = true);
+    try {
+      await _authService.updateProfile(
+        fullName: _fullNameController.text.trim().isEmpty ? null : _fullNameController.text.trim(),
+        email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+        phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+        location: _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile updated')), 
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,53 +142,78 @@ class ProfileSettingsPage extends StatelessWidget {
           const SizedBox(height: 20),
 
           Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(26),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        offset: const Offset(0, 4),
-                        blurRadius: 12,
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _error!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.redAccent),
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: _loadProfile,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
+                        ),
                       )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      buildField(
-                        label: "Full Name",
-                        icon: Icons.person,
-                        value: "Plant Lover",
+                    : SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(26),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  offset: const Offset(0, 4),
+                                  blurRadius: 12,
+                                )
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildField(
+                                  label: "Full Name",
+                                  icon: Icons.person,
+                                  controller: _fullNameController,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildField(
+                                  label: "Email Address",
+                                  icon: Icons.email,
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildField(
+                                  label: "Phone Number",
+                                  icon: Icons.phone,
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                ),
+                                const SizedBox(height: 20),
+                                _buildField(
+                                  label: "Location",
+                                  icon: Icons.location_on,
+                                  controller: _locationController,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 20),
-                      buildField(
-                        label: "Email Address",
-                        icon: Icons.email,
-                        value: "user@smartplant.com",
-                      ),
-                      const SizedBox(height: 20),
-                      buildField(
-                        label: "Phone Number",
-                        icon: Icons.phone,
-                        value: "+62 812 3456 7890",
-                      ),
-                      const SizedBox(height: 20),
-                      buildField(
-                        label: "Location",
-                        icon: Icons.location_on,
-                        value: "Jakarta, Indonesia",
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
           ),
 
           const SizedBox(height: 20),
@@ -115,12 +231,21 @@ class ProfileSettingsPage extends StatelessWidget {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                icon: const Icon(Icons.save, color: Colors.white),
-                label: const Text(
-                  "Save Changes",
-                  style: TextStyle(color: Colors.white, fontSize: 16),
+                icon: _isSaving
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save, color: Colors.white),
+                label: Text(
+                  _isSaving ? 'Saving...' : "Save Changes",
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
-                onPressed: () {},
+                onPressed: _isSaving || _isLoading ? null : _saveProfile,
               ),
             ),
           ),
@@ -130,7 +255,12 @@ class ProfileSettingsPage extends StatelessWidget {
   }
 
   // FIELD WIDGET
-  Widget buildField({required String label, required IconData icon, required String value}) {
+  Widget _buildField({
+    required String label,
+    required IconData icon,
+    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -148,9 +278,12 @@ class ProfileSettingsPage extends StatelessWidget {
               Icon(icon, color: Colors.green),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(
-                  value,
-                  style: const TextStyle(fontSize: 16, color: Colors.black87),
+                child: TextField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
             ],

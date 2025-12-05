@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'custom_back_button.dart';
 import 'edit_pots_widget.dart';
+import 'models/device_model.dart';
+import 'services/device_service.dart';
 
 class ManagePotsPage extends StatefulWidget {
   const ManagePotsPage({super.key});
@@ -10,39 +12,128 @@ class ManagePotsPage extends StatefulWidget {
 }
 
 class _ManagePotsPageState extends State<ManagePotsPage> {
-  // dummy initial data
-  final List<Map<String, String>> _pots = [
-    {"name": "Basil Plant", "id": "SPP-10001"},
-    {"name": "Succulent", "id": "SPP-10003"},
-    {"name": "Basil Plant", "id": "SPP-10002"},
-  ];
+  final DeviceService _deviceService = DeviceService();
 
-  void _editPotName(int index, String newName) {
+  List<Device> _devices = [];
+  bool _isLoading = true;
+  String? _error;
+  String? _mutatingDeviceId;
+  bool _hasChanges = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
     setState(() {
-      _pots[index]['name'] = newName;
+      _isLoading = true;
+      _error = null;
     });
+
+    try {
+      final devices = await _deviceService.getAllDevices();
+      setState(() {
+        _devices = devices;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString().replaceFirst('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleRename(Device device, String newName) async {
+    setState(() => _mutatingDeviceId = device.id);
+    try {
+      final updated = await _deviceService.updateDevice(
+        device.id,
+        potName: newName,
+      );
+
+      if (updated) {
+        setState(() {
+          _devices = _devices
+              .map((d) => d.id == device.id
+                  ? Device(
+                      id: d.id,
+                      deviceName: d.deviceName,
+                      potName: newName,
+                      mode: d.mode,
+                      pumpStatus: d.pumpStatus,
+                      createdAt: d.createdAt,
+                      updatedAt: DateTime.now(),
+                    )
+                  : d)
+              .toList();
+          _hasChanges = true;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Pot name updated')),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update pot name')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _mutatingDeviceId = null);
+      }
+    }
+  }
+
+  Future<void> _handleBack() async {
+    Navigator.pop(context, _hasChanges);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F3F3),
-      body: Column(
-        children: [
-          _buildHeader(),
+    return WillPopScope(
+      onWillPop: () async {
+        _handleBack();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F3F3),
+        body: Column(
+          children: [
+            _buildHeader(),
 
           // LIST
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-              itemCount: _pots.length,
-              itemBuilder: (context, index) {
-                final pot = _pots[index];
-                return _buildPotCard(index, pot['name']!, pot['id']!);
-              },
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!))
+                    : _devices.isEmpty
+                        ? const Center(child: Text('No devices yet'))
+                        : RefreshIndicator(
+                            onRefresh: _loadDevices,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+                              itemCount: _devices.length,
+                              itemBuilder: (context, index) {
+                                final device = _devices[index];
+                                return _buildPotCard(device);
+                              },
+                            ),
+                          ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -61,7 +152,7 @@ class _ManagePotsPageState extends State<ManagePotsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          CustomBackButton(onPressed: () => Navigator.pop(context)),
+          CustomBackButton(onPressed: _handleBack),
           const SizedBox(width: 14),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +183,8 @@ class _ManagePotsPageState extends State<ManagePotsPage> {
   // ==============================
   // LIST ITEM CARD
   // ==============================
-  Widget _buildPotCard(int index, String name, String id) {
+  Widget _buildPotCard(Device device) {
+    final isBusy = _mutatingDeviceId == device.id;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -116,7 +208,7 @@ class _ManagePotsPageState extends State<ManagePotsPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
+                    device.displayName,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -125,7 +217,7 @@ class _ManagePotsPageState extends State<ManagePotsPage> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "ID: $id",
+                    "ID: ${device.deviceName}",
                     style: const TextStyle(
                       fontSize: 13,
                       color: Colors.black54,
@@ -137,25 +229,33 @@ class _ManagePotsPageState extends State<ManagePotsPage> {
 
             // RIGHT side: EDIT button
             OutlinedButton.icon(
-              onPressed: () {
-                showEditPotModal(
-                  context: context,
-                  initialName: name,
-                  onSave: (newName) => _editPotName(index, newName),
-                );
-              },
+              onPressed: isBusy
+                  ? null
+                  : () {
+                      showEditPotModal(
+                        context: context,
+                        initialName: device.displayName,
+                        onSave: (newName) => _handleRename(device, newName),
+                      );
+                    },
               icon: const Icon(
                 Icons.edit,
                 size: 18,
                 color: Color(0xFF2E7D32),
               ),
-              label: const Text(
-                "Edit Pot",
-                style: TextStyle(
-                  color: Color(0xFF2E7D32),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              label: isBusy
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      "Edit Pot",
+                      style: TextStyle(
+                        color: Color(0xFF2E7D32),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Color(0xFF4CAF50), width: 1.4),
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),

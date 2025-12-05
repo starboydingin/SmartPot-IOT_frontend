@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'manage_pots_page.dart';
 import 'remove_device.dart';
 import 'profile_settings.dart';
 import 'login_screen.dart';
+import 'models/control_state.dart';
+import 'services/websocket_service.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -12,15 +16,45 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  int selectedRefresh = 0; // 0 = 5s, 1 = 30s, 2 = 1 minute
+  int selectedRefresh = -1; // -1 = tidak sinkron / custom
+  bool _shouldRefreshDashboard = false;
+  final WebSocketService _webSocketService = WebSocketService();
+  StreamSubscription<Map<String, dynamic>>? _controlSubscription;
+  bool _controlLoading = true;
+  bool _isUpdatingRefresh = false;
+  String? _controlError;
+  int? _activeIntervalSeconds;
+  Map<String, ControlState> _controlStates = {};
+  final List<int> _refreshDurations = [5, 30, 60];
+
+  Future<void> _handleBack() async {
+    Navigator.pop(context, _shouldRefreshDashboard);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _connectControlChannel();
+  }
+
+  @override
+  void dispose() {
+    _controlSubscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F3F3),
+    return WillPopScope(
+      onWillPop: () async {
+        _handleBack();
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F3F3),
 
-      body: SingleChildScrollView(
-        child: Column(
+        body: SingleChildScrollView(
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
@@ -47,7 +81,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                   // Back button
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
+                    onTap: _handleBack,
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -106,12 +140,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   title: "Manage Pots",
                   subtitle: "Rename or configure devices",
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ManagePotsPage(),
-                      ),
-                    );
+                    _openManagePots();
                   },
                 ),
                 divider(),
@@ -122,12 +151,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   title: "Remove Devices",
                   subtitle: "Disconnect pots from app",
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const RemoveDevicePage(),
-                      ),
-                    );
+                    _openRemoveDevices();
                   },
                 ),
               ],
@@ -139,23 +163,28 @@ class _ProfilePageState extends State<ProfilePage> {
             buildSectionCard(
               title: "Data Refresh",
               children: [
+                _buildRefreshStatus(),
+                const SizedBox(height: 12),
                 buildRefreshOption(
                   index: 0,
                   current: selectedRefresh,
                   title: "Every 5 seconds",
                   subtitle: "Real-time monitoring",
+                  enabled: _canInteractRefresh,
                 ),
                 buildRefreshOption(
                   index: 1,
                   current: selectedRefresh,
                   title: "Every 30 seconds",
                   subtitle: "Balanced mode",
+                  enabled: _canInteractRefresh,
                 ),
                 buildRefreshOption(
                   index: 2,
                   current: selectedRefresh,
                   title: "Every 1 minute",
                   subtitle: "Save battery",
+                  enabled: _canInteractRefresh,
                 ),
               ],
             ),
@@ -226,6 +255,331 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(height: 40),
           ],
         ),
+      ),
+      ),
+    );
+  }
+
+  Future<void> _openManagePots() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const ManagePotsPage()),
+    );
+    if (changed == true && mounted) {
+      setState(() => _shouldRefreshDashboard = true);
+    }
+  }
+
+  Future<void> _openRemoveDevices() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const RemoveDevicePage()),
+    );
+    if (changed == true && mounted) {
+      setState(() => _shouldRefreshDashboard = true);
+    }
+  }
+
+    bool get _hasControlDevices => _controlStates.isNotEmpty;
+
+    bool get _allIntervalsMissing =>
+      _hasControlDevices && _controlStates.values.every((state) => state.interval == null);
+
+    bool get _canInteractRefresh =>
+      _hasControlDevices && !_controlLoading && _controlError == null && !_isUpdatingRefresh;
+
+  Future<void> _connectControlChannel() async {
+    setState(() {
+      _controlLoading = true;
+      _controlError = null;
+    });
+
+    try {
+      final stream = await _webSocketService.connectToControl();
+      _controlSubscription?.cancel();
+      _controlSubscription = stream.listen(
+        _handleControlMessage,
+        onError: (_) {
+          if (!mounted) return;
+          setState(() {
+            _controlError = 'Koneksi kontrol terputus.';
+            _controlLoading = false;
+            _isUpdatingRefresh = false;
+          });
+        },
+        onDone: () {
+          if (!mounted) return;
+          setState(() {
+            _controlError = 'Koneksi kontrol ditutup.';
+          });
+        },
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _controlError = 'Tidak dapat membuka kanal kontrol.';
+        _controlLoading = false;
+      });
+    }
+  }
+
+  void _handleControlMessage(Map<String, dynamic> event) {
+    final type = event['type'];
+    final payload = event['payload'];
+
+    if (type == 'control:list') {
+      _applyControlList(payload);
+      return;
+    }
+
+    if (type == 'control:updated' || type == 'control:detail') {
+      final state = _parseControlState(payload);
+      if (state != null) {
+        final next = Map<String, ControlState>.from(_controlStates);
+        next[state.deviceId] = state;
+        _applyControlStates(next);
+      }
+      return;
+    }
+
+    if (type == 'control:error') {
+      final message = payload is Map && payload['message'] != null
+          ? payload['message'].toString()
+          : 'Terjadi kesalahan kanal kontrol.';
+      if (!mounted) return;
+      setState(() {
+        _controlError = message;
+        _isUpdatingRefresh = false;
+        _controlLoading = false;
+      });
+    }
+  }
+
+  ControlState? _parseControlState(dynamic payload) {
+    if (payload is Map<String, dynamic>) {
+      return ControlState.fromJson(payload);
+    }
+    if (payload is Map) {
+      return ControlState.fromJson(Map<String, dynamic>.from(payload));
+    }
+    return null;
+  }
+
+  void _applyControlList(dynamic payload) {
+    final nextStates = <String, ControlState>{};
+    if (payload is List) {
+      for (final item in payload) {
+        final state = _parseControlState(item);
+        if (state != null) {
+          nextStates[state.deviceId] = state;
+        }
+      }
+    } else {
+      final state = _parseControlState(payload);
+      if (state != null) {
+        nextStates[state.deviceId] = state;
+      }
+    }
+    _applyControlStates(nextStates);
+  }
+
+  void _applyControlStates(Map<String, ControlState> states) {
+    if (!mounted) return;
+
+    int nextSelected = -1;
+    int? nextIntervalSeconds;
+    if (states.isNotEmpty) {
+      final intervals = states.values
+          .map((state) => state.interval)
+          .whereType<int>()
+          .map((value) => (value / 1000).round())
+          .toSet();
+
+      if (intervals.length == 1) {
+        nextIntervalSeconds = intervals.first;
+        final matchedIndex = _refreshDurations.indexOf(nextIntervalSeconds);
+        nextSelected = matchedIndex;
+      } else {
+        nextIntervalSeconds = null;
+        nextSelected = -1;
+      }
+    }
+
+    setState(() {
+      _controlStates = states;
+      _activeIntervalSeconds = nextIntervalSeconds;
+      selectedRefresh = nextSelected;
+      _controlLoading = false;
+      _controlError = null;
+      _isUpdatingRefresh = false;
+    });
+  }
+
+  Future<void> _handleRefreshSelection(int index) async {
+    if (!_canInteractRefresh) return;
+    if (index < 0 || index >= _refreshDurations.length) return;
+
+    final int seconds = _refreshDurations[index];
+    if (_activeIntervalSeconds == seconds && selectedRefresh == index) {
+      return;
+    }
+
+    final devices = _controlStates.values.toList();
+    if (devices.isEmpty) return;
+
+    setState(() {
+      selectedRefresh = index;
+      _activeIntervalSeconds = seconds;
+      _isUpdatingRefresh = true;
+      _controlError = null;
+    });
+
+    try {
+      for (final device in devices) {
+        await _webSocketService.sendControlMessage({
+          'type': 'control:update',
+          'payload': {
+            'deviceId': device.deviceId,
+            'interval': seconds * 1000,
+          },
+        });
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingRefresh = false;
+        _shouldRefreshDashboard = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingRefresh = false;
+        _controlError = 'Gagal memperbarui interval refresh.';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak dapat menyimpan interval refresh.')),
+      );
+    }
+  }
+
+  Widget _buildRefreshStatus() {
+    if (_controlLoading) {
+      return _statusBanner(
+        icon: Icons.sync,
+        color: Colors.blueGrey.shade600,
+        text: 'Sinkronisasi interval refresh dari server...',
+      );
+    }
+
+    if (_controlError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _statusBanner(
+            icon: Icons.error_outline,
+            color: Colors.red.shade400,
+            text: _controlError!,
+            subtitle: 'Ketuk coba lagi untuk menyambung ulang.',
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _connectControlChannel,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text('Coba lagi'),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (!_hasControlDevices) {
+      return _statusBanner(
+        icon: Icons.info_outline,
+        color: Colors.blueGrey.shade500,
+        text: 'Belum ada perangkat yang terhubung.',
+        subtitle: 'Tambahkan perangkat agar interval dapat disinkronkan.',
+      );
+    }
+
+    if (_allIntervalsMissing) {
+      return _statusBanner(
+        icon: Icons.pending_outlined,
+        color: Colors.blueGrey.shade600,
+        text: 'Interval otomatis belum dikonfigurasi.',
+        subtitle: 'Atur threshold penyiraman atau pilih opsi di bawah untuk memulai.',
+      );
+    }
+
+    if (_activeIntervalSeconds == null) {
+      return _statusBanner(
+        icon: Icons.warning_amber_rounded,
+        color: Colors.orange.shade600,
+        text: 'Interval tiap perangkat berbeda.',
+        subtitle: 'Pilih salah satu opsi untuk menyeragamkan semua perangkat.',
+      );
+    }
+
+    final selectedLabel = (selectedRefresh >= 0 && selectedRefresh < _refreshDurations.length)
+      ? '${_refreshDurations[selectedRefresh]} detik'
+      : '$_activeIntervalSeconds detik';
+
+    final subtitle = selectedRefresh == -1
+        ? 'Server menggunakan nilai kustom.'
+        : 'Semua perangkat mengikuti pilihan ini.';
+
+    return _statusBanner(
+      icon: Icons.check_circle,
+      color: Colors.green.shade600,
+      text: 'Tersinkron setiap $selectedLabel.',
+      subtitle: subtitle,
+    );
+  }
+
+  Widget _statusBanner({
+    required IconData icon,
+    required Color color,
+    required String text,
+    String? subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          )
+        ],
       ),
     );
   }
@@ -328,13 +682,19 @@ class _ProfilePageState extends State<ProfilePage> {
     required int current,
     required String title,
     required String subtitle,
+    required bool enabled,
   }) {
     final bool isSelected = index == current;
 
     return GestureDetector(
-      onTap: () => setState(() => selectedRefresh = index),
-
-      child: Container(
+      onTap: !enabled
+          ? null
+          : () {
+              _handleRefreshSelection(index);
+            },
+      child: Opacity(
+        opacity: enabled ? 1 : 0.5,
+        child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -367,13 +727,20 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             ),
-
-            Icon(
-              isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-              color: isSelected ? Colors.green : Colors.grey,
-            )
+            if (_isUpdatingRefresh && isSelected)
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            else
+              Icon(
+                isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                color: isSelected ? Colors.green : Colors.grey,
+              )
           ],
         ),
+      ),
       ),
     );
   }
